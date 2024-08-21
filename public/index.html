@@ -8,6 +8,12 @@
 </head>
 <body>
 	<script type="module">
+
+		let gameLoopOn = false
+		let currentLevel = new Level(1, false, 10, 400, 0.2)
+		let elapsedTime = 0
+		let zombies = []
+
 		// Create the application helper and add its render target to the page
 		const app = new PIXI.Application({
 			resizeTo:window
@@ -27,18 +33,43 @@
 		const bgForestSprint = loadBgSprite('./assets/Background/1.png')
 		app.stage.addChild(bgForestSprint);
 
-		// add floor
-		renderFloor()
+		// start btn
+		renderStartBtn()
 
+		// add floor
+		const floorTileSize = 25
+		renderFloor(floorTileSize)
+
+		// add soldier
+		const soldier = PIXI.Sprite.from('./assets/Soldier/_Mode-Gun/01-Idle/E_E_Gun__Idle_000.png');
+		const soldierHeight = 50
+		const soldierWidth = soldierHeight * 1.16
+		soldier.x = window.innerWidth - 25
+		soldier.y = window.innerHeight - floorTileSize - soldierHeight
+		soldier.height = soldierHeight
+		soldier.width = soldierWidth
+		soldier.scale.x = -1
+		app.stage.addChild(soldier);
+
+		//ticker
+		let lastSpawn = -300
 		app.ticker.add((time) =>
 		{
-			bgCloudSprint.x += 0.2
-			bgCloudSprint2.x += 0.2
-			if(bgCloudSprint.x >= window.innerWidth){
-				bgCloudSprint.x = bgCloudSprint2.x - window.innerWidth
-			}
-			if(bgCloudSprint2.x >= window.innerWidth){
-				bgCloudSprint2.x = bgCloudSprint.x - window.innerWidth
+			moveClouds(time)
+			if(gameLoopOn) {
+				if(currentLevel.round == 1 && currentLevel.started == false) startLevel()
+				if(currentLevel.started) {
+					if(currentLevel.zombieCount > 0 && elapsedTime % currentLevel.spawnPeriod < 1) { // spawn zombie
+						if(! (lastSpawn - elapsedTime > -1*(currentLevel.spawnPeriod-1))){
+							spawnZombie()
+							lastSpawn = elapsedTime
+							currentLevel.zombieCount--
+							console.log(currentLevel.zombieCount)
+						}
+					}
+					walkZombies()
+ 					elapsedTime += time
+				}
 			}
 		});
 		
@@ -49,8 +80,7 @@
 			return sprite
 		}
 
-		function renderFloor() {
-			const floorTileSize = 25
+		function renderFloor(floorTileSize) {
 			const floorTilesToAdd = window.innerWidth/floorTileSize
 			let floorsMade = 0
 			while (floorsMade < floorTilesToAdd) {
@@ -64,9 +94,146 @@
 			}
 		}
 
+		function moveClouds(time) {
+			bgCloudSprint.x += 0.2
+			bgCloudSprint2.x += 0.2
+			if(bgCloudSprint.x >= window.innerWidth){
+				bgCloudSprint.x = bgCloudSprint2.x - window.innerWidth
+			}
+			if(bgCloudSprint2.x >= window.innerWidth){
+				bgCloudSprint2.x = bgCloudSprint.x - window.innerWidth
+			}
+		}
+
+		function renderStartBtn() {
+			const rectangle = new PIXI.Graphics();
+			rectangle.beginFill(0x66CCFF); // Set the fill color
+			const rectHeight = window.innerHeight/7
+			const rectWidth = window.innerWidth/7
+			rectangle.drawRoundedRect(0, 0, rectWidth, rectHeight, 10); // Draw a rectangle (x, y, width, height)
+			rectangle.endFill();
+			rectangle.x = (window.innerWidth/2) - (rectWidth/2)
+			rectangle.y = (window.innerHeight/4) - (rectHeight/2)
+			
+			// Make the rectangle interactive
+			rectangle.interactive = true;
+        	rectangle.cursor = 'pointer'; // Change cursor on hover
+
+			// Add event listeners for mouseover and mouseout
+			rectangle.on('mouseover', () => {
+				rectangle.tint = 0x66CCEE; // Change color on hover
+			});
+
+			rectangle.on('mouseout', () => {
+				rectangle.tint = 0xFFFFFF; // Reset color when not hovering
+			});
+
+			// Add the rectangle to the stage
+			app.stage.addChild(rectangle);
+
+			// Create text using PIXI.Text
+			const style = new PIXI.TextStyle({
+				fontFamily: 'Courier New',
+				fontSize: 24,
+				fill: 'white', // Text color
+				align: 'center'
+			});
+
+			const text = new PIXI.Text('START', style);
+
+			// Position the text in the center of the rectangle
+			text.x = rectangle.x + (rectangle.width - text.width) / 2;
+			text.y = rectangle.y + (rectangle.height - text.height) / 2;
+
+			// Add the text to the stage
+			app.stage.addChild(text);
+
+			rectangle.on('click', () => {
+				app.stage.removeChild(rectangle);
+				app.stage.removeChild(text);
+				startGameLoop()
+			})
+		}
+
+		function startGameLoop() {
+			gameLoopOn = true
+		}
+
+		function startLevel() {
+			renderRoundTxt()
+			currentLevel.started = true
+		}
+
+		function renderRoundTxt() {
+			const style = new PIXI.TextStyle({
+				fontFamily: 'Courier New',
+				fontSize: 24,
+				fill: 'white', // Text color
+				align: 'center'
+			});
+
+			const text = new PIXI.Text('ROUND ' + currentLevel.round, style);
+
+			// Position the text in the center of the rectangle
+			text.x = window.innerWidth/2 - (text.width/2)
+			text.y = window.innerHeight/4 - (text.height/2)
+
+			// Add the text to the stage
+			app.stage.addChild(text);
+
+			// remove text after 2s
+			setTimeout(()=>{
+				app.stage.removeChild(text);
+			},2000)
+		}
+
+		function spawnZombie() {
+			const walkingFrames = [
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_000.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_001.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_002.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_003.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_004.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_005.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_006.png',
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_007.png',
+			].map(file => PIXI.Texture.from(file))
+
+			const zombie = new PIXI.AnimatedSprite(walkingFrames)
+			zombie.animationSpeed = 0.1
+			zombie.play()
+
+			const zombieHeight = 50
+			const zombieWidth = zombieHeight * 1.15
+			zombie.x = -50
+			zombie.y = window.innerHeight - floorTileSize - zombieHeight + (zombieHeight/10)
+			zombie.height = zombieHeight
+			zombie.width = zombieWidth
+			zombies.push(zombie)
+			app.stage.addChild(zombie);
+		}
+
+		function walkZombies() {
+			for(const zombie of zombies) {
+				if(zombie.x < window.innerWidth - 105 )
+					zombie.x += currentLevel.speed
+			}
+		}
+
 	</script>
 </body>
 </html>
+<script>
+	class Level {
+		constructor(round, started, zombieCount, spawnPeriod, speed) {
+			this.round = round
+			this.started = started
+			this.zombieCount = zombieCount
+			this.spawnPeriod = spawnPeriod
+			this.speed = speed
+		}
+	}
+</script>
 <style>
 	*{
 		padding: 0;
