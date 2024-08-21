@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ZombieCart</title>
+	<script src="https://cdn.jsdelivr.net/npm/pixi.js@7.x/dist/pixi.min.js"></script>
+</head>
+<body>
+	<script type="module">
+		// Create the application helper and add its render target to the page
+		const app = new PIXI.Application({
+			resizeTo:window
+        });
+	
+		// Add the view to the DOM
+		document.body.appendChild(app.view);
+
+		// add background
+		const bgSkySprint = loadBgSprite('./assets/Background/3.png')
+		app.stage.addChild(bgSkySprint);
+		const bgCloudSprint = loadBgSprite('./assets/Background/2.png')
+		const bgCloudSprint2 = loadBgSprite('./assets/Background/2.png')
+		bgCloudSprint2.x = -1 * window.innerWidth;
+		app.stage.addChild(bgCloudSprint);
+		app.stage.addChild(bgCloudSprint2);
+		const bgForestSprint = loadBgSprite('./assets/Background/1.png')
+		app.stage.addChild(bgForestSprint);
+
+		// add floor
+		renderFloor()
+
+		app.ticker.add((time) =>
+		{
+			bgCloudSprint.x += 0.2
+			bgCloudSprint2.x += 0.2
+			if(bgCloudSprint.x >= window.innerWidth){
+				bgCloudSprint.x = bgCloudSprint2.x - window.innerWidth
+			}
+			if(bgCloudSprint2.x >= window.innerWidth){
+				bgCloudSprint2.x = bgCloudSprint.x - window.innerWidth
+			}
+		});
+		
+		function loadBgSprite(path) {
+			const sprite = PIXI.Sprite.from(path);
+			sprite.width = window.innerWidth;
+			sprite.height = window.innerHeight;
+			return sprite
+		}
+
+		function renderFloor() {
+			const floorTileSize = 25
+			const floorTilesToAdd = window.innerWidth/floorTileSize
+			let floorsMade = 0
+			while (floorsMade < floorTilesToAdd) {
+				const floor = PIXI.Sprite.from('./assets/Background/Dirt-1.png');
+				floor.height = floorTileSize
+				floor.width = floorTileSize
+				floor.x = floorTileSize * floorsMade
+				floor.y = window.innerHeight - floorTileSize
+				app.stage.addChild(floor);
+				floorsMade++
+			}
+		}
+
+	</script>
+</body>
+</html>
+<style>
+	*{
+		padding: 0;
+		margin: 0;
+		box-sizing: border-box;
+		overflow: hidden;
+	}
+</style>
