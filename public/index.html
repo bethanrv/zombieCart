@@ -10,9 +10,11 @@
 	<script type="module">
 
 		let gameLoopOn = false
-		let currentLevel = new Level(1, false, 10, 400, 0.2)
+		let currentLevel = new Level(1, false, 10, 400, 0.2, 200, 1)
 		let elapsedTime = 0
 		let zombies = []
+		let shotPeriod = 100
+		let bullets = []
 
 		// Create the application helper and add its render target to the page
 		const app = new PIXI.Application({
@@ -41,7 +43,15 @@
 		renderFloor(floorTileSize)
 
 		// add soldier
-		const soldier = PIXI.Sprite.from('./assets/Soldier/_Mode-Gun/01-Idle/E_E_Gun__Idle_000.png');
+		let soldierHealth = 100
+		const idleFrames = [
+			'./assets/Soldier/_Mode-Gun/01-Idle/E_E_Gun__Idle_000.png'
+		].map(file => PIXI.Texture.from(file))
+
+		const soldier = new PIXI.AnimatedSprite(idleFrames)
+		soldier.animationSpeed = 0.1
+		soldier.play()
+		
 		const soldierHeight = 50
 		const soldierWidth = soldierHeight * 1.16
 		soldier.x = window.innerWidth - 25
@@ -51,8 +61,27 @@
 		soldier.scale.x = -1
 		app.stage.addChild(soldier);
 
+		// add soldier health bar
+		const healthBar = new PIXI.Graphics();
+		healthBar.lineStyle(2, 0x66CCEE);
+		const healthBarHeight = soldierHeight/10
+		const healthBarWidth = soldierWidth
+		healthBar.drawRoundedRect(0, 0, healthBarWidth, healthBarHeight, 3)
+		healthBar.x = soldier.x - soldierWidth
+		healthBar.y = soldier.y - (soldierHeight * (1/2))
+		app.stage.addChild(healthBar);
+
+		const healthBarInner = new PIXI.Graphics();
+		healthBarInner.beginFill(0x66CCEE)
+		healthBarInner.drawRoundedRect(0,0, healthBarWidth, healthBarHeight, 3)
+		healthBarInner.endFill()
+		healthBarInner.x = soldier.x - soldierWidth
+		healthBarInner.y = soldier.y - (soldierHeight * (1/2))
+		app.stage.addChild(healthBarInner);
+
 		//ticker
-		let lastSpawn = -300
+		let lastSpawn = -1 * currentLevel.spawnPeriod
+		let lastShot = -1 * shotPeriod
 		app.ticker.add((time) =>
 		{
 			moveClouds(time)
@@ -61,13 +90,17 @@
 				if(currentLevel.started) {
 					if(currentLevel.zombieCount > 0 && elapsedTime % currentLevel.spawnPeriod < 1) { // spawn zombie
 						if(! (lastSpawn - elapsedTime > -1*(currentLevel.spawnPeriod-1))){
-							spawnZombie()
+							spawnZombie(currentLevel.health, currentLevel.damage)
 							lastSpawn = elapsedTime
 							currentLevel.zombieCount--
-							console.log(currentLevel.zombieCount)
 						}
 					}
+					if(elapsedTime % shotPeriod < 1 && !(lastShot - elapsedTime > -1 * (shotPeriod-1))) {
+						lastShot = elapsedTime
+						soldierAttack()
+					}
 					walkZombies()
+					moveBullets()
  					elapsedTime += time
 				}
 			}
@@ -156,7 +189,21 @@
 		}
 
 		function startGameLoop() {
+			resetGame()
 			gameLoopOn = true
+		}
+
+		function resetGame() {
+			for(const zombie of zombies) {
+				app.stage.removeChild(zombie.sprite);
+			}
+			zombies = []
+			soldierHealth = 100
+			currentLevel = new Level(1, false, 10, 400, 0.2, 10, 1)
+			healthBarInner.width = soldierWidth
+			switchAnimation(soldier, idleFrames)
+			lastSpawn = -1 * currentLevel.spawnPeriod
+			elapsedTime = 0
 		}
 
 		function startLevel() {
@@ -187,7 +234,7 @@
 			},2000)
 		}
 
-		function spawnZombie() {
+		function spawnZombie(health, damage) {
 			const walkingFrames = [
 				'./assets/Zombie/02-Walk/__Zombie01_Walk_000.png',
 				'./assets/Zombie/02-Walk/__Zombie01_Walk_001.png',
@@ -205,19 +252,222 @@
 
 			const zombieHeight = 50
 			const zombieWidth = zombieHeight * 1.15
-			zombie.x = -50
+			zombie.x = -25
 			zombie.y = window.innerHeight - floorTileSize - zombieHeight + (zombieHeight/10)
 			zombie.height = zombieHeight
 			zombie.width = zombieWidth
-			zombies.push(zombie)
+
+			let zombieObj = new Zombie(zombie, health, false, damage) 
+
+			zombies.push(zombieObj)
 			app.stage.addChild(zombie);
 		}
 
+		function zombieAttack(zombie) {
+			const attackFrames = [
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_000.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_001.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_002.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_003.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_004.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_005.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_006.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_007.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_008.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_009.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_010.png',
+				'./assets/Zombie/03-Attack/__Zombie01_Attack_011.png'
+			].map(file => PIXI.Texture.from(file));
+			switchAnimation(zombie, attackFrames)
+		}
+
+		function stopZombies() {
+			for(const zombie of zombies) {
+				zombieStop(zombie.sprite)
+			}
+		}
+
+		function zombieStop(zombie) {
+			const stopFrame = [
+				'./assets/Zombie/02-Walk/__Zombie01_Walk_000.png'
+			].map(file => PIXI.Texture.from(file));
+			switchAnimation(zombie, stopFrame)
+		}
+
+		function switchAnimation(character, newFrames) {
+			character.textures = newFrames;
+			character.play();
+		}
+
+
 		function walkZombies() {
 			for(const zombie of zombies) {
-				if(zombie.x < window.innerWidth - 105 )
-					zombie.x += currentLevel.speed
+				if(zombie.health <= 0)
+					continue
+				if(zombie.sprite.x < window.innerWidth - 105 ) // walk
+					zombie.sprite.x += currentLevel.speed
+				else if(!zombie.isAttacking){ // switch to attack
+					zombieAttack(zombie.sprite)
+					zombie.isAttacking = true
+				}
+				else { // attack
+					if(Math.random() > 0.95){
+						soldierHealth -= zombie.damage
+						healthBarInner.width = (soldierHealth/100) * soldierWidth
+						if(soldierHealth <= 0) {
+							gameOver()
+						}
+					}
+				}
 			}
+		}
+
+		function soldierAttack() {
+			const closestZombie = getClosestTarget()
+			if(closestZombie != -1)
+				soldierShoot(closestZombie)
+		}
+
+		function getClosestTarget() {
+			if(zombies.length == 0) return -1
+			let closestZombie = zombies[0]
+			let minDistance = closestZombie.sprite.x - soldier.x
+			for(const zombie of zombies) {
+				if(zombie.sprite.x - soldier.x < minDistance){
+					minDistance = zombie.sprite.x - soldier.x
+					closestZombie = zombie
+				}
+			}
+			return closestZombie
+		}
+
+		function soldierShoot(closestZombie) {
+			soldierShootAnimation()
+			setTimeout(() => {
+				addBullet()
+			}, 125);
+		}
+
+		function addBullet() {
+			const bullet = PIXI.Sprite.from('./assets/Soldier/_Weapon/Bullet.png');
+			bullet.width = 5;
+			bullet.height = 5;
+			bullet.x = soldier.x - soldierWidth - 5
+			bullet.y = soldier.y + (4*soldierHeight/5) - 5
+			app.stage.addChild(bullet);
+			const bulletObj = new Bullet(bullet, -20, 0.1, 1)
+			bullets.push(bulletObj)
+		}
+
+		function moveBullets() {
+			let removeShot = false
+			for(const bullet of bullets) {
+				if(bulletHitCheck(bullet)){
+					removeShot = true
+				}else{
+					bullet.sprite.x += bullet.vx
+					bullet.sprite.y += bullet.vy
+				}
+			}
+			if(removeShot)
+				bullets.shift()
+		}
+
+		function bulletHitCheck(bullet) {
+			let removeZombie = false
+			for(const zombie of zombies) {
+				if( bullet.sprite.x <= (zombie.sprite.x + (5*zombie.sprite.width/6)) ){
+					if ( bullet.sprite.x >= zombie.sprite.x ) {
+						zombie.health -= bullet.damage
+						if(zombie.health <= 0) {
+							removeZombie = true
+						}
+						app.stage.removeChild(bullet.sprite)
+					}
+				}
+			}
+			if(removeZombie){
+				zombieDie(zombies.shift())
+			}
+		}
+
+		function zombieDie(zombie) {
+			const dieFrames = [
+				'./assets/Zombie/05-Die/__Zombie01_Die_000.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_001.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_002.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_003.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_004.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_005.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_006.png',
+				'./assets/Zombie/05-Die/__Zombie01_Die_007.png'
+			].map(file => PIXI.Texture.from(file));
+			zombie.sprite.loop = false
+			switchAnimation(zombie.sprite, dieFrames)
+			setTimeout(() => {
+				app.stage.removeChild(zombie.sprite)
+			}, 1000);
+		}
+
+		function soldierShootAnimation() {
+			const shootFrames = [
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_000.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_001.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_002.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_003.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_004.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_005.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_006.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_007.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_008.png',
+				'./assets/Soldier/_Mode-Gun/03-Shot/E_E_Gun__Attack_009.png'
+			].map(file => PIXI.Texture.from(file));
+			soldier.loop = false
+			switchAnimation(soldier, shootFrames)
+		}
+
+		function soldierDie() {
+			const dieFrames = [
+				'./assets/Soldier/06-Die/E_E__Die_000.png',
+				'./assets/Soldier/06-Die/E_E__Die_001.png',
+				'./assets/Soldier/06-Die/E_E__Die_002.png',
+				'./assets/Soldier/06-Die/E_E__Die_003.png',
+				'./assets/Soldier/06-Die/E_E__Die_004.png',
+				'./assets/Soldier/06-Die/E_E__Die_005.png',
+				'./assets/Soldier/06-Die/E_E__Die_006.png',
+				'./assets/Soldier/06-Die/E_E__Die_007.png',
+			].map(file => PIXI.Texture.from(file));
+			switchAnimation(soldier, dieFrames)
+			soldier.loop = false
+		}
+
+		function gameOver() {
+			gameLoopOn = false
+			currentLevel.started = false
+			stopZombies()
+			soldierDie()
+
+			const style = new PIXI.TextStyle({
+				fontFamily: 'Courier New',
+				fontSize: 24,
+				fill: 'red', // Text color
+				align: 'center'
+			});
+
+			const text = new PIXI.Text('GAME OVER', style);
+
+			// Position the text in the center of the rectangle
+			text.x = window.innerWidth/2 - (text.width/2)
+			text.y = window.innerHeight/4 - (text.height/2)
+
+			// Add the text to the stage
+			app.stage.addChild(text);
+
+			// remove text after 3s
+			setTimeout(()=>{
+				app.stage.removeChild(text);
+				renderStartBtn()
+			},3000)
 		}
 
 	</script>
@@ -225,12 +475,30 @@
 </html>
 <script>
 	class Level {
-		constructor(round, started, zombieCount, spawnPeriod, speed) {
+		constructor(round, started, zombieCount, spawnPeriod, speed, health, damage) {
 			this.round = round
 			this.started = started
 			this.zombieCount = zombieCount
 			this.spawnPeriod = spawnPeriod
 			this.speed = speed
+			this.health = health
+			this.damage = damage
+		}
+	}
+	class Zombie {
+		constructor(sprite, health, isAttacking, damage) {
+			this.sprite = sprite
+			this.health = health
+			this.isAttacking = isAttacking
+			this.damage = damage
+		}
+	}
+	class Bullet {
+		constructor(sprite, vx, vy, damage) {
+			this.sprite = sprite
+			this.vx = vx
+			this.vy = vy
+			this.damage = damage
 		}
 	}
 </script>
